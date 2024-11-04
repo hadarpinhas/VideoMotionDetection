@@ -1,7 +1,4 @@
-x64/
-*.exe
-.vs/*
-build/
-settings.json
+.vs
 *.sln
+x64
 VideoMotionDetection

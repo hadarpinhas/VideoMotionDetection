@@ -44,7 +44,7 @@ const std::string keys =
 "{n numOfIter    | 50            | ECC's iterations }"
 "{e epsilon      | 0.0001        | ECC's convergence epsilon }"
 "{o outputWarp   | outWarp.ecc   | output warp (matrix) filename }"
-"{m motionType   | translation        | type of motion (translation, euclidean, affine, homography) }"
+"{m motionType   | affine        | type of motion (translation, euclidean, affine, homography) }"
 "{v verbose      | 1             | display initial and final images }"
 "{w warpedImfile | warpedECC.png | warped input image }"
 "{h help | | print help message }"
@@ -122,19 +122,19 @@ static void draw_warped_roi(Mat& image, const int width, const int height, Mat& 
 			warp_mat.at<float>(y, x) = W.at<float>(y, x);
 	//warp the corners of rectangle
 	// top-left
-	HOMO_VECTOR(H, 1, 1); // denotes the top-left corner H(1,1,1) for future white lines to create indicating box area
-	gemm(warp_mat, H, 1, 0, 0, U); // gemm - general matrix multiplication gemm(A,B,a,C,a,U) U = (A*B)*a + (C)*c = (warp_mat*H)*1 + (0)*0 
+	HOMO_VECTOR(H, 1, 1);
+	gemm(warp_mat, H, 1, 0, 0, U);
 	GET_HOMO_VALUES(U, top_left.x, top_left.y);
 	// top-right
-	HOMO_VECTOR(H, width, 1); // H(w,1,1)
+	HOMO_VECTOR(H, width, 1);
 	gemm(warp_mat, H, 1, 0, 0, U);
 	GET_HOMO_VALUES(U, top_right.x, top_right.y);
 	// bottom-left
-	HOMO_VECTOR(H, 1, height); // H(1,h,1)
+	HOMO_VECTOR(H, 1, height);
 	gemm(warp_mat, H, 1, 0, 0, U);
 	GET_HOMO_VALUES(U, bottom_left.x, bottom_left.y);
 	// bottom-right
-	HOMO_VECTOR(H, width, height); // H(w,h,1)
+	HOMO_VECTOR(H, width, height);
 	gemm(warp_mat, H, 1, 0, 0, U);
 	GET_HOMO_VALUES(U, bottom_right.x, bottom_right.y);
 	// draw the warped perimeter
@@ -145,12 +145,6 @@ static void draw_warped_roi(Mat& image, const int width, const int height, Mat& 
 }
 int main(const int argc, const char * argv[])
 {
-	// if target_image (the image to warp towards) is not given we resize inputImage into target_image
-	// then, we warp the target_image and save it on template_image.
-	// this way we can later test gpu and cpu when using findTransformECCGpu
-	// And finnaly, rewarping the template_image back to the target_image:
-	// 		warpPerspective(target_image, warped_image, warp_matrix, warped_image.size(), INTER_LINEAR + WARP_INVERSE_MAP)
-
 	CommandLineParser parser(argc, argv, keys);
 	parser.about("ECC demo");
 	parser.printMessage();
@@ -192,35 +186,27 @@ int main(const int argc, const char * argv[])
 	}
 	Mat target_image;
 	Mat template_image;
-	inputImage.copyTo(target_image); // input becomes the target
-
-	if (tempImgFile != "") { // template image is given by user
+	if (tempImgFile != "") {
+		inputImage.copyTo(target_image);
 		template_image = imread(samples::findFile(tempImgFile), IMREAD_GRAYSCALE);
 		if (template_image.empty()) {
 			cerr << "Unable to load the template image" << endl;
 			return -1;
 		}
 	}
-	// else: template_image (the image to warp towards) is not given so we resize inputImage into target_image
-	else { // apply warp to input image
-
-		// Size out_shape(inputImage.size()); // 1920, 2560
-		//Size out_shape(1200, 900); // 1920, 2560
-		Size out_shape(1920, 2560); // 1920, 2560
-		resize(inputImage, target_image, out_shape, 0, 0, INTER_LINEAR_EXACT);
-
+	else { //apply random warp to input image
+		//resize(inputImage, target_image, Size(216, 216), 0, 0, INTER_LINEAR_EXACT);
+		resize(inputImage, target_image, Size(2560, 1920), 0, 0, INTER_LINEAR_EXACT);
+		//resize(inputImage, inputImage, Size(1920, 2560), 0, 0, INTER_LINEAR_EXACT);
 		Mat warpGround;
 		RNG rng(getTickCount());
 		double angle;
-		int shiftX = 100; // 67
-		int shiftY = 50; // 38
-		std::cout << "\nshiftX, shiftY: " << shiftX << ", " << shiftY << endl;
 		switch (mode_temp) {
 		case MOTION_TRANSLATION:
-			angle = 0;
-			warpGround = (Mat_<float>(2, 3) <<  cos(angle), -sin(angle), shiftX,
-												sin(angle),  cos(angle), shiftY);
-			warpAffine(target_image, template_image, warpGround, out_shape, INTER_LINEAR);
+			warpGround = (Mat_<float>(2, 3) << 1, 0, (70),
+				0, 1, (40));
+			warpAffine(target_image, template_image, warpGround,
+				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
 
 			//warpGround = (Mat_<float>(2, 3) << 1, 0, (rng.uniform(10.f, 20.f)),
 			//	0, 1, (rng.uniform(10.f, 20.f)));
@@ -229,9 +215,10 @@ int main(const int argc, const char * argv[])
 			break;
 		case MOTION_EUCLIDEAN:
 			angle = 0;//CV_PI*11/180.f;
-			warpGround = (Mat_<float>(2, 3) <<  cos(angle), -sin(angle), shiftX,
-												sin(angle),  cos(angle), shiftY);
-			warpAffine(target_image, template_image, warpGround, out_shape, INTER_LINEAR);
+			warpGround = (Mat_<float>(2, 3) << cos(angle), -sin(angle), (70),
+				sin(angle), cos(angle), (40));
+			warpAffine(target_image, template_image, warpGround,
+				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
 
 			//angle = CV_PI / 30 + CV_PI*rng.uniform((double)-2.f, (double)2.f) / 180;
 			//warpGround = (Mat_<float>(2, 3) << cos(angle), -sin(angle), (rng.uniform(10.f, 20.f)),
@@ -241,9 +228,10 @@ int main(const int argc, const char * argv[])
 			break;
 		case MOTION_AFFINE:
 			angle = 0;// CV_PI * 11 / 180.f;
-			warpGround = (Mat_<float>(2, 3) <<  cos(angle), -sin(angle), shiftX,
-												sin(angle),  cos(angle), shiftY);
-			warpAffine(target_image, template_image, warpGround, out_shape, INTER_LINEAR);
+			warpGround = (Mat_<float>(2, 3) << cos(angle), -sin(angle), (70),
+				sin(angle), cos(angle), (40));
+			warpAffine(target_image, template_image, warpGround,
+				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
 
 			//warpGround = (Mat_<float>(2, 3) << (1 - rng.uniform(-0.05f, 0.05f)),
 			//	(rng.uniform(-0.03f, 0.03f)), (rng.uniform(10.f, 20.f)),
@@ -261,22 +249,15 @@ int main(const int argc, const char * argv[])
 				(rng.uniform(-0.01f, 0.01f)), (rng.uniform(10.f, 20.f)),
 				(rng.uniform(-0.01f, 0.01f)), (1 - rng.uniform(-0.01f, 0.01f)), (rng.uniform(10.f, 20.f)),
 				(rng.uniform(0.0001f, 0.0003f)), (rng.uniform(0.0001f, 0.0003f)), 1.f);
-			warpPerspective(target_image, template_image, warpGround, out_shape, INTER_LINEAR);
+			warpPerspective(target_image, template_image, warpGround,
+				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
 			//warpPerspective(target_image, template_image, warpGround,
 			//	Size(200, 200), INTER_LINEAR + WARP_INVERSE_MAP);
 
 			break;
 		}
 	}
-	std::cout << "saving images in build" << endl;
-	cv::imwrite("template (will be warped).jpg", template_image); // created from input shifted if not given
-	cv::imwrite("target_image (input).jpg", target_image); // input
-	std::cout << "finished saving images in build" << endl;
-
 	const int warp_mode = mode_temp;
-
-	////////////////////////////////	test Gpu 	///////////////////////////////////////////
-
 	// initialize or load the warp matrix
 	Mat warp_matrix;
 	if (warpType == "homography")
@@ -303,7 +284,6 @@ int main(const int argc, const char * argv[])
 	// start timing
 	int gaussian_size = 5;
 	double tic_init = (double)getTickCount();
-
 	double cc = findTransformECCGpu(template_image, target_image, warp_matrix, warp_mode,
 		TermCriteria(TermCriteria::COUNT + TermCriteria::EPS,
 			number_of_iterations, termination_eps), gaussian_size);
@@ -318,23 +298,21 @@ int main(const int argc, const char * argv[])
 	cout << "GPU Alignment time (" << warpType << " transformation): "
 		<< total_time << " sec" << endl << flush;
 	cout << "Final correlation: " << cc << endl << flush;
-	// save the final warp matrix, warped image is saved later
+	// save the final warp matrix
 	saveWarp(finalWarp, warp_matrix, warp_mode);
 
-	////////////////////////////////	end Gpu test	///////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////  start Cpu test	///////////////////////////////////////////
 
 	if (warpType == "homography")
 		warp_matrix = Mat::eye(3, 3, CV_32F);
 	else
 		warp_matrix = Mat::eye(2, 3, CV_32F);
 
+
+
 	tic_init = (double)getTickCount();
 	cc = cv::findTransformECC(template_image, target_image, warp_matrix, warp_mode,
 		TermCriteria(TermCriteria::COUNT + TermCriteria::EPS,
 			number_of_iterations, termination_eps));
-
 	if (cc == -1)
 	{
 		cerr << "The execution was interrupted. The correlation value is going to be minimized." << endl;
@@ -347,35 +325,33 @@ int main(const int argc, const char * argv[])
 		<< total_time << " sec" << endl << flush;
 	cout << "Final correlation: " << cc << endl << flush;
 
-	////////////////////////////////	end test Cpu 	///////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////////////
+
 
 	if (verbose) {
 		cout << "\nThe final warp has been saved in the file: " << finalWarp << endl << flush;
 	}
-	// warping the input (target) image (if not given, it  was created by shifting the input image)
+	// save the final warped image
 	Mat warped_image = Mat(template_image.rows, template_image.cols, CV_32FC1);
-	if (warp_mode != MOTION_HOMOGRAPHY){
-		warpAffine(template_image, warped_image, warp_matrix, warped_image.size(), INTER_LINEAR);
-	}
-	else{
-		warpPerspective(template_image, warped_image, warp_matrix, warped_image.size(), INTER_LINEAR);
-	}
-
+	if (warp_mode != MOTION_HOMOGRAPHY)
+		warpAffine(target_image, warped_image, warp_matrix, warped_image.size(),
+			INTER_LINEAR + WARP_INVERSE_MAP);
+	else
+		warpPerspective(target_image, warped_image, warp_matrix, warped_image.size(),
+			INTER_LINEAR + WARP_INVERSE_MAP);
 	//save the warped image
 	imwrite(warpedImFile, warped_image);
-
+	// display resulting images
 	if (verbose)
 	{
 		cout << "The warped image has been saved in the file: " << warpedImFile << endl << flush;
-		// namedWindow("image", WINDOW_AUTOSIZE);
-		// namedWindow("template", WINDOW_AUTOSIZE);
-		// namedWindow("warped image", WINDOW_AUTOSIZE);
-		// namedWindow("error (black: no error)", WINDOW_AUTOSIZE);
-		// moveWindow("image", 20, 300);
-		// moveWindow("template", 300, 300);
-		// moveWindow("warped image", 600, 300);
-		// moveWindow("error (black: no error)", 900, 300);
+		namedWindow("image", WINDOW_AUTOSIZE);
+		namedWindow("template", WINDOW_AUTOSIZE);
+		namedWindow("warped image", WINDOW_AUTOSIZE);
+		namedWindow("error (black: no error)", WINDOW_AUTOSIZE);
+		moveWindow("image", 20, 300);
+		moveWindow("template", 300, 300);
+		moveWindow("warped image", 600, 300);
+		moveWindow("error (black: no error)", 900, 300);
 		// draw boundaries of corresponding regions
 		Mat identity_matrix = Mat::eye(3, 3, CV_32F);
 		draw_warped_roi(target_image, template_image.cols - 2, template_image.rows - 2, warp_matrix);
@@ -394,11 +370,6 @@ int main(const int argc, const char * argv[])
 		waitKey(200);
 		imshow("error (black: no error)", abs(errorImage) * 255 / max_of_error);
 		waitKey(0);
-		cout << "\nsaving images" << endl;
-		imwrite("image.jpg", target_image);
-		imwrite("template.jpg", template_image);
-		imwrite("warped_image.jpg", warped_image);
-		imwrite("error__black_means_no_error.jpg", abs(errorImage) * 255 / max_of_error);
 	}
 	// done
 	return 0;

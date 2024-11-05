@@ -38,15 +38,15 @@ static void draw_warped_roi(Mat& image, const int width, const int height, Mat& 
 	(x) = static_cast<float> (X.at<float>(0,0)/X.at<float>(2,0));\
 	(y) = static_cast<float> (X.at<float>(1,0)/X.at<float>(2,0));
 const std::string keys =
-"{@inputImage    | fruits.jpg    | input image filename }"
-"{@templateImage |               | template image filename (optional)}"
+"{@inputImage    | imgs/img1.jpg    | input image filename }"
+"{@templateImage | imgs/img2.jpg       | template image filename (optional)}"
 "{@inputWarp     |               | input warp (matrix) filename (optional)}"
 "{n numOfIter    | 50            | ECC's iterations }"
 "{e epsilon      | 0.0001        | ECC's convergence epsilon }"
-"{o outputWarp   | outWarp.ecc   | output warp (matrix) filename }"
+"{o outputWarp   | out/outWarp.ecc   | output warp (matrix) filename }"
 "{m motionType   | affine        | type of motion (translation, euclidean, affine, homography) }"
 "{v verbose      | 1             | display initial and final images }"
-"{w warpedImfile | warpedECC.png | warped input image }"
+"{w warpedImfile | out/warpedECC.png | warped input image }"
 "{h help | | print help message }"
 ;
 static void help(const char** argv)
@@ -178,7 +178,16 @@ int main(const int argc, const char * argv[])
 		mode_temp = MOTION_AFFINE;
 	else
 		mode_temp = MOTION_HOMOGRAPHY;
-	Mat inputImage = imread(samples::findFile(imgFile), IMREAD_GRAYSCALE);
+	//Mat inputImage = imread(samples::findFile(imgFile), IMREAD_GRAYSCALE);
+
+	std::string basePath = "C:/Users/hadar/Documents/gitRepos/Hadar/VideoMotionDetection/";
+
+	imgFile			= basePath + imgFile;
+	finalWarp		= basePath + finalWarp;
+	warpedImFile	= basePath + warpedImFile;
+
+	Mat inputImage = imread(imgFile, IMREAD_GRAYSCALE);
+
 	if (inputImage.empty())
 	{
 		cerr << "Unable to load the inputImage" << endl;
@@ -186,14 +195,22 @@ int main(const int argc, const char * argv[])
 	}
 	Mat target_image;
 	Mat template_image;
-	if (tempImgFile != "") {
+
+	
+
+	if (tempImgFile != "") {	// template_image path was given so we read it
 		inputImage.copyTo(target_image);
-		template_image = imread(samples::findFile(tempImgFile), IMREAD_GRAYSCALE);
+		//template_image = imread(samples::findFile(tempImgFile), IMREAD_GRAYSCALE);
+		tempImgFile = basePath + tempImgFile;
+		template_image = imread(tempImgFile, IMREAD_GRAYSCALE);
 		if (template_image.empty()) {
 			cerr << "Unable to load the template image" << endl;
 			return -1;
 		}
 	}
+
+	////////////////	else:	no template_image path was given so templateImage will be the warped input image (target_image)
+
 	else { //apply random warp to input image
 		//resize(inputImage, target_image, Size(216, 216), 0, 0, INTER_LINEAR_EXACT);
 		resize(inputImage, target_image, Size(2560, 1920), 0, 0, INTER_LINEAR_EXACT);
@@ -257,6 +274,9 @@ int main(const int argc, const char * argv[])
 			break;
 		}
 	}
+
+	//////////////////              End of defining the template image		//////////////////////
+
 	const int warp_mode = mode_temp;
 	// initialize or load the warp matrix
 	Mat warp_matrix;

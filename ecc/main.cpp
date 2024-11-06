@@ -198,84 +198,15 @@ int main(const int argc, const char * argv[])
 
 	
 
-	if (tempImgFile != "") {	// template_image path was given so we read it
-		inputImage.copyTo(target_image);
-		//template_image = imread(samples::findFile(tempImgFile), IMREAD_GRAYSCALE);
-		tempImgFile = basePath + tempImgFile;
-		template_image = imread(tempImgFile, IMREAD_GRAYSCALE);
-		if (template_image.empty()) {
-			cerr << "Unable to load the template image" << endl;
-			return -1;
-		}
+
+	inputImage.copyTo(target_image);
+	//template_image = imread(samples::findFile(tempImgFile), IMREAD_GRAYSCALE);
+	tempImgFile = basePath + tempImgFile;
+	template_image = imread(tempImgFile, IMREAD_GRAYSCALE);
+	if (template_image.empty()) {
+		cerr << "Unable to load the template image" << endl;
+		return -1;
 	}
-
-	////////////////	else:	no template_image path was given so templateImage will be the warped input image (target_image)
-
-	else { //apply random warp to input image
-		//resize(inputImage, target_image, Size(216, 216), 0, 0, INTER_LINEAR_EXACT);
-		resize(inputImage, target_image, Size(2560, 1920), 0, 0, INTER_LINEAR_EXACT);
-		//resize(inputImage, inputImage, Size(1920, 2560), 0, 0, INTER_LINEAR_EXACT);
-		Mat warpGround;
-		RNG rng(getTickCount());
-		double angle;
-		switch (mode_temp) {
-		case MOTION_TRANSLATION:
-			warpGround = (Mat_<float>(2, 3) << 1, 0, (70),
-				0, 1, (40));
-			warpAffine(target_image, template_image, warpGround,
-				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
-
-			//warpGround = (Mat_<float>(2, 3) << 1, 0, (rng.uniform(10.f, 20.f)),
-			//	0, 1, (rng.uniform(10.f, 20.f)));
-			//warpAffine(target_image, template_image, warpGround,
-			//	Size(200, 200), INTER_LINEAR + WARP_INVERSE_MAP);
-			break;
-		case MOTION_EUCLIDEAN:
-			angle = 0;//CV_PI*11/180.f;
-			warpGround = (Mat_<float>(2, 3) << cos(angle), -sin(angle), (70),
-				sin(angle), cos(angle), (40));
-			warpAffine(target_image, template_image, warpGround,
-				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
-
-			//angle = CV_PI / 30 + CV_PI*rng.uniform((double)-2.f, (double)2.f) / 180;
-			//warpGround = (Mat_<float>(2, 3) << cos(angle), -sin(angle), (rng.uniform(10.f, 20.f)),
-			//	sin(angle), cos(angle), (rng.uniform(10.f, 20.f)));
-			//warpAffine(target_image, template_image, warpGround,
-			//	Size(200, 200), INTER_LINEAR + WARP_INVERSE_MAP);
-			break;
-		case MOTION_AFFINE:
-			angle = 0;// CV_PI * 11 / 180.f;
-			warpGround = (Mat_<float>(2, 3) << cos(angle), -sin(angle), (70),
-				sin(angle), cos(angle), (40));
-			warpAffine(target_image, template_image, warpGround,
-				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
-
-			//warpGround = (Mat_<float>(2, 3) << (1 - rng.uniform(-0.05f, 0.05f)),
-			//	(rng.uniform(-0.03f, 0.03f)), (rng.uniform(10.f, 20.f)),
-			//	(rng.uniform(-0.03f, 0.03f)), (1 - rng.uniform(-0.05f, 0.05f)),
-			//	(rng.uniform(10.f, 20.f)));
-			//warpAffine(target_image, template_image, warpGround,
-			//	Size(200, 200), INTER_LINEAR + WARP_INVERSE_MAP);
-			break;
-		case MOTION_HOMOGRAPHY:
-			//warpGround = (Mat_<float>(3, 3) << 
-			//	(1), (0), (70),
-			//	(0), (1), (40),
-			//	(0), (0), 1.f);
-			warpGround = (Mat_<float>(3, 3) << (1 - rng.uniform(-0.01f, 0.01f)),
-				(rng.uniform(-0.01f, 0.01f)), (rng.uniform(10.f, 20.f)),
-				(rng.uniform(-0.01f, 0.01f)), (1 - rng.uniform(-0.01f, 0.01f)), (rng.uniform(10.f, 20.f)),
-				(rng.uniform(0.0001f, 0.0003f)), (rng.uniform(0.0001f, 0.0003f)), 1.f);
-			warpPerspective(target_image, template_image, warpGround,
-				Size(2560, 1920), INTER_LINEAR + WARP_INVERSE_MAP);
-			//warpPerspective(target_image, template_image, warpGround,
-			//	Size(200, 200), INTER_LINEAR + WARP_INVERSE_MAP);
-
-			break;
-		}
-	}
-
-	//////////////////              End of defining the template image		//////////////////////
 
 	const int warp_mode = mode_temp;
 	// initialize or load the warp matrix
@@ -382,12 +313,16 @@ int main(const int argc, const char * argv[])
 		minMaxLoc(errorImage, NULL, &max_of_error);
 		// show images
 		cout << "Press any key to exit the demo (you might need to click on the images before)." << endl << flush;
+		resize(target_image, target_image, Size(), 0.25, 0.25);
 		imshow("image", target_image);
 		waitKey(200);
+		resize(template_image, template_image, Size(), 0.25, 0.25);
 		imshow("template", template_image);
 		waitKey(200);
+		resize(warped_image, warped_image, Size(), 0.25, 0.25);
 		imshow("warped image", warped_image);
 		waitKey(200);
+		resize(errorImage, errorImage, Size(), 0.25, 0.25);
 		imshow("error (black: no error)", abs(errorImage) * 255 / max_of_error);
 		waitKey(0);
 	}

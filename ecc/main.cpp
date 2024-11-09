@@ -143,21 +143,33 @@ static void draw_warped_roi(Mat& image, const int width, const int height, Mat& 
 	line(image, bottom_right, bottom_left, Scalar(255));
 	line(image, bottom_left, top_left, Scalar(255));
 }
+
+void init_params(const CommandLineParser& parser, string& imgFile, string& tempImgFile, string& inWarpFile, string& warpType, string& finalWarp,
+				string& warpedImFile, int& number_of_iterations, int& verbose, double& termination_eps) {
+	imgFile = parser.get<string>(0);
+	tempImgFile = parser.get<string>(1);
+	inWarpFile = parser.get<string>(2);
+	number_of_iterations = parser.get<int>("n");
+	termination_eps = parser.get<double>("e");
+	warpType = parser.get<string>("m");
+	verbose = parser.get<int>("v");
+	finalWarp = parser.get<string>("o");
+	warpedImFile = parser.get<string>("w");
+}
+
 int main(const int argc, const char * argv[])
 {
-	CommandLineParser parser(argc, argv, keys);
-	parser.about("ECC demo");
+	const CommandLineParser parser(argc, argv, keys);
+	//parser.about("ECC demo");
 	parser.printMessage();
 	help(argv);
-	string imgFile = parser.get<string>(0);
-	string tempImgFile = parser.get<string>(1);
-	string inWarpFile = parser.get<string>(2);
-	int number_of_iterations = parser.get<int>("n");
-	double termination_eps = parser.get<double>("e");
-	string warpType = parser.get<string>("m");
-	int verbose = parser.get<int>("v");
-	string finalWarp = parser.get<string>("o");
-	string warpedImFile = parser.get<string>("w");
+
+	string imgFile, tempImgFile, inWarpFile, warpType, finalWarp, warpedImFile;
+	int number_of_iterations, verbose;
+	double termination_eps;
+	init_params(parser, imgFile, tempImgFile, inWarpFile, warpType, finalWarp, warpedImFile, number_of_iterations, verbose, termination_eps);
+
+
 	if (!parser.check())
 	{
 		parser.printErrors();
@@ -187,26 +199,11 @@ int main(const int argc, const char * argv[])
 	warpedImFile	= basePath + warpedImFile;
 
 	Mat inputImage = imread(imgFile, IMREAD_GRAYSCALE);
-
-	if (inputImage.empty())
-	{
-		cerr << "Unable to load the inputImage" << endl;
-		return -1;
-	}
-	Mat target_image;
-	Mat template_image;
-
-	
-
+	Mat target_image, template_image;
 
 	inputImage.copyTo(target_image);
-	//template_image = imread(samples::findFile(tempImgFile), IMREAD_GRAYSCALE);
 	tempImgFile = basePath + tempImgFile;
 	template_image = imread(tempImgFile, IMREAD_GRAYSCALE);
-	if (template_image.empty()) {
-		cerr << "Unable to load the template image" << endl;
-		return -1;
-	}
 
 	const int warp_mode = mode_temp;
 	// initialize or load the warp matrix
@@ -215,117 +212,49 @@ int main(const int argc, const char * argv[])
 		warp_matrix = Mat::eye(3, 3, CV_32F);
 	else
 		warp_matrix = Mat::eye(2, 3, CV_32F);
-	if (inWarpFile != "") {
-		int readflag = readWarp(inWarpFile, warp_matrix, warp_mode);
-		if ((!readflag) || warp_matrix.empty())
-		{
-			cerr << "-> Check warp initialization file" << endl << flush;
-			return -1;
+
+	// Set the path to the video file
+	string videoPath = "C:/Users/hadar/Documents/database/videos/drones/drone_pov/aerial_town_view_1.mp4";
+
+	// Open the video file
+	VideoCapture cap(videoPath);
+
+	// Check if video opened successfully
+	if (!cap.isOpened()) {
+		cerr << "Error: Could not open video file." << endl;
+		return -1;
+	}
+
+	// Get the frame rate of the video
+	double fps = cap.get(CAP_PROP_FPS);
+	int delay = static_cast<int>(1000 / fps);  // Delay between frames in ms
+
+	// Loop to read and display frames
+	while (true) {
+		Mat frame;
+
+		// Capture frame-by-frame
+		cap >> frame;
+
+		// Check if the frame is empty, which indicates the end of the video
+		if (frame.empty()) {
+			cout << "End of video reached." << endl;
+			break;
+		}
+
+		// Display the frame
+		cv::imshow("Video Reader", frame);
+
+		// Wait for 'q' key to quit or proceed to the next frame
+		if (cv::waitKey(delay) == 'q') {
+			break;
 		}
 	}
-	else {
-		printf("\n ->Performance Warning: Identity warp ideally assumes images of "
-			"similar size. If the deformation is strong, the identity warp may not "
-			"be a good initialization. \n");
-	}
-	if (number_of_iterations > 200)
-		cout << "-> Warning: too many iterations " << endl;
-	if (warp_mode != MOTION_HOMOGRAPHY)
-		warp_matrix.rows = 2;
-	// start timing
-	int gaussian_size = 5;
-	double tic_init = (double)getTickCount();
-	double cc = findTransformECCGpu(template_image, target_image, warp_matrix, warp_mode,
-		TermCriteria(TermCriteria::COUNT + TermCriteria::EPS,
-			number_of_iterations, termination_eps), gaussian_size);
-	if (cc == -1)
-	{
-		cerr << "The execution was interrupted. The correlation value is going to be minimized." << endl;
-		cerr << "Check the warp initialization and/or the size of images." << endl << flush;
-	}
-	// end timing
-	double toc_final = (double)getTickCount();
-	double total_time = (toc_final - tic_init) / (getTickFrequency());
-	cout << "GPU Alignment time (" << warpType << " transformation): "
-		<< total_time << " sec" << endl << flush;
-	cout << "Final correlation: " << cc << endl << flush;
-	// save the final warp matrix
-	saveWarp(finalWarp, warp_matrix, warp_mode);
 
-
-	if (warpType == "homography")
-		warp_matrix = Mat::eye(3, 3, CV_32F);
-	else
-		warp_matrix = Mat::eye(2, 3, CV_32F);
+	//double cc = findTransformECCGpu(template_image, target_image, warp_matrix, warp_mode, TermCriteria(TermCriteria::COUNT + TermCriteria::EPS,	number_of_iterations, termination_eps), gaussian_size);
 
 
 
-	tic_init = (double)getTickCount();
-	cc = cv::findTransformECC(template_image, target_image, warp_matrix, warp_mode,
-		TermCriteria(TermCriteria::COUNT + TermCriteria::EPS,
-			number_of_iterations, termination_eps));
-	if (cc == -1)
-	{
-		cerr << "The execution was interrupted. The correlation value is going to be minimized." << endl;
-		cerr << "Check the warp initialization and/or the size of images." << endl << flush;
-	}
-	// end timing
-	toc_final = (double)getTickCount();
-	total_time = (toc_final - tic_init) / (getTickFrequency());
-	cout << "CPU Alignment time (" << warpType << " transformation): "
-		<< total_time << " sec" << endl << flush;
-	cout << "Final correlation: " << cc << endl << flush;
-
-
-
-	if (verbose) {
-		cout << "\nThe final warp has been saved in the file: " << finalWarp << endl << flush;
-	}
-	// save the final warped image
-	Mat warped_image = Mat(template_image.rows, template_image.cols, CV_32FC1);
-	if (warp_mode != MOTION_HOMOGRAPHY)
-		warpAffine(target_image, warped_image, warp_matrix, warped_image.size(),
-			INTER_LINEAR + WARP_INVERSE_MAP);
-	else
-		warpPerspective(target_image, warped_image, warp_matrix, warped_image.size(),
-			INTER_LINEAR + WARP_INVERSE_MAP);
-	//save the warped image
-	imwrite(warpedImFile, warped_image);
-	// display resulting images
-	if (verbose)
-	{
-		cout << "The warped image has been saved in the file: " << warpedImFile << endl << flush;
-		namedWindow("image", WINDOW_AUTOSIZE);
-		namedWindow("template", WINDOW_AUTOSIZE);
-		namedWindow("warped image", WINDOW_AUTOSIZE);
-		namedWindow("error (black: no error)", WINDOW_AUTOSIZE);
-		moveWindow("image", 20, 300);
-		moveWindow("template", 300, 300);
-		moveWindow("warped image", 600, 300);
-		moveWindow("error (black: no error)", 900, 300);
-		// draw boundaries of corresponding regions
-		Mat identity_matrix = Mat::eye(3, 3, CV_32F);
-		draw_warped_roi(target_image, template_image.cols - 2, template_image.rows - 2, warp_matrix);
-		draw_warped_roi(template_image, template_image.cols - 2, template_image.rows - 2, identity_matrix);
-		Mat errorImage;
-		subtract(template_image, warped_image, errorImage);
-		double max_of_error;
-		minMaxLoc(errorImage, NULL, &max_of_error);
-		// show images
-		cout << "Press any key to exit the demo (you might need to click on the images before)." << endl << flush;
-		resize(target_image, target_image, Size(), 0.25, 0.25);
-		imshow("image", target_image);
-		waitKey(200);
-		resize(template_image, template_image, Size(), 0.25, 0.25);
-		imshow("template", template_image);
-		waitKey(200);
-		resize(warped_image, warped_image, Size(), 0.25, 0.25);
-		imshow("warped image", warped_image);
-		waitKey(200);
-		resize(errorImage, errorImage, Size(), 0.25, 0.25);
-		imshow("error (black: no error)", abs(errorImage) * 255 / max_of_error);
-		waitKey(0);
-	}
 	// done
 	return 0;
 }
